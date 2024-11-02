@@ -4,6 +4,7 @@ package main
 // sqlx的な参考: https://jmoiron.github.io/sqlx/
 
 import (
+	"cloud.google.com/go/profiler"
 	"fmt"
 	"github.com/felixge/fgprof"
 	"github.com/go-sql-driver/mysql"
@@ -17,6 +18,7 @@ import (
 	"os/exec"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
@@ -136,6 +138,14 @@ func main() {
 			log.Fatalf("failed to run dns server: %v", err)
 		}
 	}()
+
+	if err := profiler.Start(profiler.Config{
+		Service:        "isucon13",
+		ServiceVersion: time.Now().Format("2006-01-02 15:04:05"),
+		DebugLogging:   true,
+	}); err != nil {
+		log.Fatalln(err)
+	}
 
 	e := echo.New()
 	e.Debug = true
