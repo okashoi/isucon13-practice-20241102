@@ -130,7 +130,12 @@ func main() {
 		log.Println(http.ListenAndServe(":6060", nil))
 	}()
 	// DNSサーバ起動
-	go runDNS()
+	go func() {
+		err := runDNS()
+		if err != nil {
+			log.Fatalf("failed to run dns server: %v", err)
+		}
+	}()
 
 	e := echo.New()
 	e.Debug = true
