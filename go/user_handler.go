@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"time"
 
 	"github.com/google/uuid"
@@ -256,9 +255,8 @@ func registerHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert user theme: "+err.Error())
 	}
 
-	if out, err := exec.Command("pdnsutil", "add-record", "t.isucon.pw", req.Name, "A", "0", powerDNSSubdomainAddress).CombinedOutput(); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, string(out)+": "+err.Error())
-	}
+	// DNS登録
+	addSubdomain(req.Name + ".t.isucon.pw.")
 
 	user, err := fillUserResponse(ctx, tx, userModel)
 	if err != nil {

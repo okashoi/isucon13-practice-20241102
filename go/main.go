@@ -7,18 +7,18 @@ import (
 	"cloud.google.com/go/profiler"
 	"fmt"
 	"github.com/felixge/fgprof"
+	"github.com/go-sql-driver/mysql"
+	"github.com/jmoiron/sqlx"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
+	"sync"
 	"time"
-
-	"github.com/go-sql-driver/mysql"
-	"github.com/jmoiron/sqlx"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
@@ -28,14 +28,12 @@ import (
 )
 
 const (
-	listenPort                     = 8080
-	powerDNSSubdomainAddressEnvKey = "ISUCON13_POWERDNS_SUBDOMAIN_ADDRESS"
+	listenPort = 8080
 )
 
 var (
-	powerDNSSubdomainAddress string
-	dbConn                   *sqlx.DB
-	secret                   = []byte("isucon13_session_cookiestore_defaultsecret")
+	dbConn *sqlx.DB
+	secret = []byte("isucon13_session_cookiestore_defaultsecret")
 )
 
 func init() {
@@ -119,6 +117,9 @@ func initializeHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
 	}
 
+	resetSubdomains()
+	rrCache = sync.Map{}
+
 	c.Request().Header.Add("Content-Type", "application/json;charset=utf-8")
 	return c.JSON(http.StatusOK, InitializeResponse{
 		Language: "golang",
@@ -129,6 +130,13 @@ func main() {
 	http.DefaultServeMux.Handle("/debug/fgprof", fgprof.Handler())
 	go func() {
 		log.Println(http.ListenAndServe(":6060", nil))
+	}()
+	// DNSサーバ起動
+	go func() {
+		err := runDNS()
+		if err != nil {
+			log.Fatalf("failed to run dns server: %v", err)
+		}
 	}()
 
 	if err := profiler.Start(profiler.Config{
@@ -212,13 +220,6 @@ func main() {
 	}
 	defer conn.Close()
 	dbConn = conn
-
-	subdomainAddr, ok := os.LookupEnv(powerDNSSubdomainAddressEnvKey)
-	if !ok {
-		e.Logger.Errorf("environ %s must be provided", powerDNSSubdomainAddressEnvKey)
-		os.Exit(1)
-	}
-	powerDNSSubdomainAddress = subdomainAddr
 
 	// HTTPサーバ起動
 	listenAddr := net.JoinHostPort("", strconv.Itoa(listenPort))
