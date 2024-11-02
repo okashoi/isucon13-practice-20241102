@@ -1328,10 +1328,7 @@ func resetSubdomains() {
 func addSubdomain(subdomain string) {
 	muSubdomains.Lock()
 	defer muSubdomains.Unlock()
-	if !slices.Contains(subdomains, subdomain) {
-		subdomains = append(subdomains, subdomain)
-		log.Printf("Added subdomain: %s", subdomain)
-	}
+	subdomains = append(subdomains, subdomain)
 }
 
 // DNSHandler は DNS リクエストを処理します。
