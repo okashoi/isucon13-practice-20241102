@@ -129,6 +129,8 @@ func main() {
 	go func() {
 		log.Println(http.ListenAndServe(":6060", nil))
 	}()
+	// DNSサーバ起動
+	go runDNS()
 
 	e := echo.New()
 	e.Debug = true
@@ -210,9 +212,6 @@ func main() {
 		e.Logger.Errorf("failed to start HTTP server: %v", err)
 		os.Exit(1)
 	}
-
-	// DNSサーバ起動
-	go runDNS()
 }
 
 type ErrorResponse struct {
