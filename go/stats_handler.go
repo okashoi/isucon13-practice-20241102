@@ -96,7 +96,8 @@ FROM users u;`
 	sort.Sort(ranking)
 
 	var rank int64 = 1
-	for _, entry := range ranking {
+	for i := len(ranking) - 1; i >= 0; i-- {
+		entry := ranking[i]
 		if entry.Username == username {
 			break
 		}
