@@ -74,60 +74,66 @@ func getUserStatisticsHandler(c echo.Context) error {
 	}
 	defer tx.Rollback()
 
+	// Fetch user details
 	var user UserModel
 	if err := tx.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return echo.NewHTTPError(http.StatusBadRequest, "not found user that has the given username")
+		} else {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 		}
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 	}
 
-	// 統計情報の取得を最適化
-	var stats UserStatistics
+	// Fetch cumulative statistics for the user in one batch query
 	query := `
-		SELECT 
-			COALESCE(SUM(lc.tip), 0) AS total_tip,
-			COALESCE(COUNT(DISTINCT lc.id), 0) AS total_livecomments,
-			COALESCE(COUNT(DISTINCT r.id), 0) AS total_reactions,
-			COALESCE(SUM(lvh.viewers_count), 0) AS viewers_count,
-			(SELECT r.emoji_name 
-			 FROM reactions AS r 
-			 JOIN livestreams AS l ON r.livestream_id = l.id 
-			 WHERE l.user_id = ? 
-			 GROUP BY r.emoji_name 
-			 ORDER BY COUNT(*) DESC, r.emoji_name DESC 
-			 LIMIT 1) AS favorite_emoji
-		FROM livestreams AS l
-		LEFT JOIN livecomments AS lc ON lc.livestream_id = l.id
-		LEFT JOIN reactions AS r ON r.livestream_id = l.id
-		LEFT JOIN livestream_viewers_history AS lvh ON lvh.livestream_id = l.id
-		WHERE l.user_id = ?
-	`
-	if err := tx.GetContext(ctx, &stats, query, user.ID, user.ID); err != nil {
+        SELECT 
+            COALESCE(SUM(r.count), 0) AS total_reactions, 
+            COALESCE(SUM(lc.count), 0) AS total_livecomments,
+            COALESCE(SUM(lc.tip), 0) AS total_tip,
+            COUNT(DISTINCT lv.id) AS viewers_count
+        FROM users u
+        LEFT JOIN livestreams ls ON ls.user_id = u.id
+        LEFT JOIN reactions r ON r.livestream_id = ls.id
+        LEFT JOIN livecomments lc ON lc.livestream_id = ls.id
+        LEFT JOIN livestream_viewers_history lv ON lv.livestream_id = ls.id
+        WHERE u.id = ?
+    `
+
+	var stats UserStatistics
+	if err := tx.GetContext(ctx, &stats, query, user.ID); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user statistics: "+err.Error())
 	}
 
-	// ランキングの算出を最適化
+	// Calculate user rank based on total score
 	rankQuery := `
-		SELECT 1 + COUNT(*) AS rank
-		FROM users AS u
-		JOIN livestreams AS l ON u.id = l.user_id
-		LEFT JOIN reactions AS r ON l.id = r.livestream_id
-		LEFT JOIN livecomments AS lc ON l.id = lc.livestream_id
-		WHERE (COALESCE(COUNT(r.id), 0) + COALESCE(SUM(lc.tip), 0)) > (
-			SELECT COALESCE(COUNT(r2.id), 0) + COALESCE(SUM(lc2.tip), 0)
-			FROM users AS u2
-			JOIN livestreams AS l2 ON u2.id = l2.user_id
-			LEFT JOIN reactions AS r2 ON l2.id = r2.livestream_id
-			LEFT JOIN livecomments AS lc2 ON l2.id = lc2.livestream_id
-			WHERE u2.id = ?
-		)
-	`
-	if err := tx.GetContext(ctx, &stats.Rank, rankQuery, user.ID); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to calculate rank: "+err.Error())
+        SELECT u.name, 
+               COALESCE(SUM(r.count), 0) + COALESCE(SUM(lc.count), 0) + COALESCE(SUM(lc.tip), 0) AS score
+        FROM users u
+        LEFT JOIN livestreams ls ON ls.user_id = u.id
+        LEFT JOIN reactions r ON r.livestream_id = ls.id
+        LEFT JOIN livecomments lc ON lc.livestream_id = ls.id
+        GROUP BY u.id
+        ORDER BY score DESC
+    `
+
+	var rankings []UserRankingEntry
+	if err := tx.SelectContext(ctx, &rankings, rankQuery); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to calculate user rankings: "+err.Error())
 	}
 
-	// レスポンスの返却
+	// Assign rank to the user
+	for i, ranking := range rankings {
+		if ranking.Username == username {
+			stats.Rank = int64(i + 1)
+			break
+		}
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit transaction: "+err.Error())
+	}
+
 	return c.JSON(http.StatusOK, stats)
 }
 
