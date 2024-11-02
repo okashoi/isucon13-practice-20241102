@@ -507,14 +507,16 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModel Li
 
 	// `IN`句で一括取得
 	var tags []Tag
-	query, args, err := sqlx.In("SELECT id, name FROM tags WHERE id IN (?)", tagIDs)
-	if err != nil {
-		return Livestream{}, err
-	}
+	if len(tagIDs) != 0 {
+		query, args, err := sqlx.In("SELECT id, name FROM tags WHERE id IN (?)", tagIDs)
+		if err != nil {
+			return Livestream{}, err
+		}
 
-	query = tx.Rebind(query) // プレースホルダーを適切な形式に調整
-	if err := tx.SelectContext(ctx, &tags, query, args...); err != nil {
-		return Livestream{}, err
+		query = tx.Rebind(query) // プレースホルダーを適切な形式に調整
+		if err := tx.SelectContext(ctx, &tags, query, args...); err != nil {
+			return Livestream{}, err
+		}
 	}
 
 	livestream := Livestream{
