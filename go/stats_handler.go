@@ -89,11 +89,11 @@ func getUserStatisticsHandler(c echo.Context) error {
 	var ranking UserRanking
 	query := `
 SELECT u.name, (SELECT COUNT(*) FROM reactions WHERE user_id = u.id) + (SELECT IFNULL(SUM(tip), 0) FROM livecomments WHERE user_id = u.id) AS score
-FROM users u
-ORDER BY score DESC;`
+FROM users u;`
 	if err := tx.Select(&ranking, query); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get users: "+err.Error())
 	}
+	sort.Sort(ranking)
 
 	var rank int64 = 1
 	for _, entry := range ranking {
