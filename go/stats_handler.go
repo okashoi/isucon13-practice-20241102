@@ -77,39 +77,48 @@ func getUserStatisticsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 	}
 
-	// スコアとランクを1つのクエリで計算
-	query := `
+	// ユーザーのランクを計算
+	// 各ユーザーのスコアを計算し、そのランクを取得
+	rankQuery := `
 	WITH user_scores AS (
 		SELECT 
-			u.id,
 			u.name,
-			COUNT(DISTINCT r.id) + IFNULL(SUM(lc.tip), 0) as score
+			(
+				SELECT COUNT(*)
+				FROM reactions r
+				JOIN livestreams ls ON r.livestream_id = ls.id
+				WHERE ls.user_id = u.id
+			) + COALESCE(
+				(
+					SELECT SUM(lc.tip)
+					FROM livecomments lc
+					JOIN livestreams ls ON lc.livestream_id = ls.id
+					WHERE ls.user_id = u.id
+				), 0
+			) as score
 		FROM users u
-		LEFT JOIN livestreams l ON l.user_id = u.id
-		LEFT JOIN reactions r ON r.livestream_id = l.id
-		LEFT JOIN livecomments lc ON lc.livestream_id = l.id
-		GROUP BY u.id, u.name
-	),
-	ranked_users AS (
-		SELECT 
-			name,
-			RANK() OVER (ORDER BY score DESC) as rank
-		FROM user_scores
 	)
-	SELECT rank FROM ranked_users WHERE name = ?
+	SELECT COUNT(*) + 1
+	FROM user_scores
+	WHERE score > (
+		SELECT score
+		FROM user_scores
+		WHERE name = ?
+	);
 	`
+
 	var rank int64
-	if err := dbConn.GetContext(ctx, &rank, query, username); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err := dbConn.GetContext(ctx, &rank, rankQuery, username); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get rank: "+err.Error())
 	}
 
-	// 統計情報を1つのクエリで取得
-	query = `
+	// 統計情報を取得
+	statsQuery := `
 	SELECT
-		COUNT(DISTINCT r.id) as total_reactions,
-		COUNT(DISTINCT lc.id) as total_livecomments,
-		IFNULL(SUM(lc.tip), 0) as total_tip,
-		COUNT(DISTINCT lvh.id) as viewers_count
+		COALESCE(COUNT(DISTINCT r.id), 0) as total_reactions,
+		COALESCE(COUNT(DISTINCT lc.id), 0) as total_livecomments,
+		COALESCE(SUM(lc.tip), 0) as total_tip,
+		COALESCE(COUNT(DISTINCT lvh.id), 0) as viewers_count
 	FROM users u
 	LEFT JOIN livestreams l ON l.user_id = u.id
 	LEFT JOIN reactions r ON r.livestream_id = l.id
@@ -127,28 +136,28 @@ func getUserStatisticsHandler(c echo.Context) error {
 	}
 
 	var result statsResult
-	if err := dbConn.GetContext(ctx, &result, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err := dbConn.GetContext(ctx, &result, statsQuery, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get statistics: "+err.Error())
 	}
 
 	// お気に入り絵文字を取得
-	query = `
+	emojiQuery := `
 	SELECT emoji_name
 	FROM (
 		SELECT 
 			r.emoji_name,
 			COUNT(*) as emoji_count
-		FROM users u
-		INNER JOIN livestreams l ON l.user_id = u.id
-		INNER JOIN reactions r ON r.livestream_id = l.id
-		WHERE u.id = ?
+		FROM reactions r
+		JOIN livestreams l ON r.livestream_id = l.id
+		WHERE l.user_id = ?
 		GROUP BY r.emoji_name
 		ORDER BY emoji_count DESC, emoji_name DESC
 		LIMIT 1
 	) t
 	`
+
 	var favoriteEmoji string
-	if err := dbConn.GetContext(ctx, &favoriteEmoji, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err := dbConn.GetContext(ctx, &favoriteEmoji, emojiQuery, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to find favorite emoji: "+err.Error())
 	}
 
@@ -160,6 +169,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 		TotalTip:          result.TotalTip,
 		FavoriteEmoji:     favoriteEmoji,
 	}
+
 	return c.JSON(http.StatusOK, stats)
 }
 
