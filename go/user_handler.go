@@ -86,7 +86,6 @@ type PostIconResponse struct {
 
 func getIconHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-
 	username := c.Param("username")
 
 	tx, err := dbConn.BeginTxx(ctx, nil)
@@ -103,8 +102,13 @@ func getIconHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 	}
 
-	var image []byte
-	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", user.ID); err != nil {
+	var icon struct {
+		Image    []byte
+		IconHash string
+	}
+
+	// icon_hash（インビジブルカラムも含めて）とimageを一緒に取得
+	if err := tx.GetContext(ctx, &icon, "SELECT image, icon_hash FROM icons WHERE user_id = ?", user.ID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return c.File(fallbackImage)
 		} else {
@@ -112,7 +116,15 @@ func getIconHandler(c echo.Context) error {
 		}
 	}
 
-	return c.Blob(http.StatusOK, "image/jpeg", image)
+	// If-None-Matchヘッダを確認して、ETagと一致するかを判定
+	clientETag := c.Request().Header.Get("If-None-Match")
+	if clientETag == icon.IconHash {
+		return c.NoContent(http.StatusNotModified)
+	}
+
+	// ETagをレスポンスヘッダに設定
+	c.Response().Header().Set("ETag", icon.IconHash)
+	return c.Blob(http.StatusOK, "image/jpeg", icon.Image)
 }
 
 func postIconHandler(c echo.Context) error {
