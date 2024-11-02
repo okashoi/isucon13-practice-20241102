@@ -1366,6 +1366,7 @@ func DNSHandler(w dns.ResponseWriter, r *dns.Msg) {
 				newRR(fmt.Sprintf("%s 120 IN A 192.168.0.11", question.Name)),
 			}
 		} else {
+			return
 			// NXDOMAIN を返す場合は以下を有効にしてください
 			// m.Rcode = dns.RcodeNameError
 			// m.Ns = []dns.RR{
