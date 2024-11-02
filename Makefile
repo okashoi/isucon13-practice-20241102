@@ -19,6 +19,7 @@ truncate-logs:
 
 start-services:
 	sudo systemctl start mysql
+	sudo setcap 'cap_net_bind_service=+ep' go/isupipe
 	sudo systemctl start isupipe-go
 	sudo systemctl start nginx
 
