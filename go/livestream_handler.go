@@ -68,6 +68,7 @@ type ReservationSlotModel struct {
 }
 
 func reserveLivestreamHandler(c echo.Context) error {
+	fmt.Printf("reserveLivestreamHandler\n")
 	ctx := c.Request().Context()
 	defer c.Request().Body.Close()
 
