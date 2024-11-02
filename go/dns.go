@@ -1326,6 +1326,7 @@ func resetSubdomains() {
 
 // addSubdomain は新しいサブドメインを追加します。
 func addSubdomain(subdomain string) {
+	fmt.Printf("addSubdomain: %s\n", subdomain)
 	muSubdomains.Lock()
 	defer muSubdomains.Unlock()
 	subdomains = append(subdomains, subdomain)
@@ -1375,7 +1376,7 @@ func DNSHandler(w dns.ResponseWriter, r *dns.Msg) {
 		// 他のクエリタイプは無視
 	}
 
-	_ = w.WriteMsg(m)
+	w.WriteMsg(m)
 }
 
 func runDNS() error {
