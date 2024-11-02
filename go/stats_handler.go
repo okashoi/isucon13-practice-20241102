@@ -87,9 +87,9 @@ func getUserStatisticsHandler(c echo.Context) error {
 	}
 
 	// ランク算出
-	var ranking UserRanking
+	var ranking []UserRankingEntry
 	query := `
-	SELECT u.name, COUNT(r.id) + IFNULL(SUM(l2.tip), 0) AS score
+	SELECT u.name AS username, COUNT(r.id) + IFNULL(SUM(l2.tip), 0) AS score
 	FROM users u
 	LEFT JOIN livestreams l ON l.user_id = u.id
 	LEFT JOIN reactions r ON r.livestream_id = l.id
