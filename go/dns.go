@@ -1382,9 +1382,37 @@ func DNSHandler(w dns.ResponseWriter, r *dns.Msg) {
 }
 
 func runDNS() error {
-	// DNS サーバーの設定
-	dns.HandleFunc("u.isucon.dev.", DNSHandler)
-	server := &dns.Server{Addr: ":53", Net: "udp"}
-	log.Printf("Starting DNS server on %s", server.Addr)
-	return server.ListenAndServe()
+	dns.HandleFunc("u.isucon.dev.", func(w dns.ResponseWriter, r *dns.Msg) {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		if r.Question[0].Qtype == dns.TypeNS && r.Question[0].Name == "u.isucon.dev." {
+			m.Answer = []dns.RR{
+				newRR("u.isucon.dev. 120 IN NS ns1.u.isucon.dev."),
+			}
+			m.Extra = []dns.RR{
+				newRR("ns1.u.isucon.dev. 120 IN A 54.178.156.176"),
+			}
+		} else {
+			muSubdomains.RLock()
+			defer muSubdomains.RUnlock()
+
+			if slices.Contains(subdomains, r.Question[0].Name) {
+				m.Answer = []dns.RR{
+					newRR(r.Question[0].Name + " 120 IN A 54.178.156.176"),
+				}
+			} else {
+				return
+				// m.Rcode = dns.RcodeNameError
+				// m.Ns = []dns.RR{
+				// 	newRR("u.isucon.dev. 60 IN SOA ns1.u.isucon.dev. hostmaster.u.isucon.dev. 0 10800 3600 604800 3600"),
+				// }
+			}
+		}
+		w.WriteMsg(m)
+	})
+
+	fmt.Println(">>>> STARTING DNS SERVER <<<<")
+
+	srv := &dns.Server{Addr: ":53", Net: "udp"}
+	return srv.ListenAndServe()
 }
