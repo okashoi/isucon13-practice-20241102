@@ -62,70 +62,75 @@ func (r UserRanking) Less(i, j int) bool {
 func getUserStatisticsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
+	// セッションの検証
 	if err := verifyUserSession(c); err != nil {
-		// echo.NewHTTPErrorが返っているのでそのまま出力
 		return err
 	}
 
 	username := c.Param("username")
-	// ユーザごとに、紐づく配信について、累計リアクション数、累計ライブコメント数、累計売上金額を算出
-	// また、現在の合計視聴者数もだす
 
+	// トランザクションの開始
 	tx, err := dbConn.BeginTxx(ctx, nil)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to begin transaction: "+err.Error())
 	}
 	defer tx.Rollback()
 
+	// ユーザー情報の取得
 	var user UserModel
 	if err := tx.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return echo.NewHTTPError(http.StatusBadRequest, "not found user that has the given username")
-		} else {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 	}
 
-	// ランク算出
-	var ranking []UserRankingEntry
-	query := `
-	SELECT u.name AS username, COUNT(r.id) + IFNULL(SUM(l2.tip), 0) AS score
-	FROM users u
-	LEFT JOIN livestreams l ON l.user_id = u.id
-	LEFT JOIN reactions r ON r.livestream_id = l.id
-	LEFT JOIN livecomments l2 ON l2.livestream_id = l.id
-	GROUP BY u.id
-	ORDER BY score DESC, u.name ASC
-	`
-	if err := tx.SelectContext(ctx, &ranking, query); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get ranking: "+err.Error())
-	}
-
-	var rank int64 = 1
-	for _, entry := range ranking {
-		if entry.Username == username {
-			break
-		}
-		rank++
-	}
-
-	// リアクション数、ライブコメント数、チップ合計、合計視聴者数、お気に入り絵文字を一度に取得
+	// ユーザーのリアクション数、コメント数、チップの合計、視聴者数、お気に入り絵文字を一度に取得
 	var stats UserStatistics
-	query = `
-	SELECT 
-		(SELECT COUNT(*) FROM reactions r INNER JOIN livestreams l ON r.livestream_id = l.id WHERE l.user_id = u.id) AS total_reactions,
-		(SELECT COUNT(*) FROM livecomments lc INNER JOIN livestreams l ON lc.livestream_id = l.id WHERE l.user_id = u.id) AS total_livecomments,
-		(SELECT IFNULL(SUM(lc.tip), 0) FROM livecomments lc INNER JOIN livestreams l ON lc.livestream_id = l.id WHERE l.user_id = u.id) AS total_tip,
-		(SELECT COUNT(*) FROM livestream_viewers_history lv INNER JOIN livestreams l ON lv.livestream_id = l.id WHERE l.user_id = u.id) AS viewers_count,
-		(SELECT r.emoji_name FROM reactions r INNER JOIN livestreams l ON r.livestream_id = l.id WHERE l.user_id = u.id GROUP BY r.emoji_name ORDER BY COUNT(*) DESC, r.emoji_name DESC LIMIT 1) AS favorite_emoji
-	FROM users u
-	WHERE u.name = ?
+	query := `
+		SELECT
+			COALESCE(SUM(r.tip), 0) AS total_tip,
+			COALESCE(COUNT(DISTINCT lc.id), 0) AS total_livecomments,
+			COALESCE(COUNT(DISTINCT r.id), 0) AS total_reactions,
+			COALESCE(SUM(lvh.viewers_count), 0) AS viewers_count,
+			(SELECT emoji_name 
+			 FROM reactions AS r 
+			 JOIN livestreams AS l ON r.livestream_id = l.id 
+			 WHERE l.user_id = ? 
+			 GROUP BY r.emoji_name 
+			 ORDER BY COUNT(*) DESC, r.emoji_name DESC 
+			 LIMIT 1) AS favorite_emoji
+		FROM livestreams AS l
+		LEFT JOIN livecomments AS lc ON lc.livestream_id = l.id
+		LEFT JOIN reactions AS r ON r.livestream_id = l.id
+		LEFT JOIN livestream_viewers_history AS lvh ON lvh.livestream_id = l.id
+		WHERE l.user_id = ?
 	`
-	if err := tx.GetContext(ctx, &stats, query, username); err != nil {
+	if err := tx.GetContext(ctx, &stats, query, user.ID, user.ID); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user statistics: "+err.Error())
 	}
 
-	stats.Rank = rank
+	// ランクの取得
+	rankQuery := `
+		SELECT 1 + COUNT(*) AS rank
+		FROM users AS u
+		JOIN livestreams AS l ON u.id = l.user_id
+		LEFT JOIN reactions AS r ON l.id = r.livestream_id
+		LEFT JOIN livecomments AS lc ON l.id = lc.livestream_id
+		WHERE (COALESCE(COUNT(r.id), 0) + COALESCE(SUM(lc.tip), 0)) > (
+			SELECT COALESCE(COUNT(r2.id), 0) + COALESCE(SUM(lc2.tip), 0)
+			FROM users AS u2
+			JOIN livestreams AS l2 ON u2.id = l2.user_id
+			LEFT JOIN reactions AS r2 ON l2.id = r2.livestream_id
+			LEFT JOIN livecomments AS lc2 ON l2.id = lc2.livestream_id
+			WHERE u2.id = ?
+		)
+	`
+	if err := tx.GetContext(ctx, &stats.Rank, rankQuery, user.ID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to calculate rank: "+err.Error())
+	}
+
+	// 結果の出力
 	return c.JSON(http.StatusOK, stats)
 }
 
