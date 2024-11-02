@@ -94,11 +94,11 @@ func getUserStatisticsHandler(c echo.Context) error {
 
 	statsQuery := `
 		SELECT 
-			IFNULL(r.reactions_count, 0) as reactions_count,
-			IFNULL(lc.livecomments_count, 0) as livecomments_count,
-			IFNULL(lc.total_tip, 0) as total_tip,
-			IFNULL(v.viewers_count, 0) as viewers_count,
-			IFNULL(e.emoji_name, '') as favorite_emoji
+			COALESCE(r.reactions_count, 0) as reactions_count,
+			COALESCE(lc.livecomments_count, 0) as livecomments_count,
+			COALESCE(lc.total_tip, 0) as total_tip,
+			COALESCE(v.viewers_count, 0) as viewers_count,
+			COALESCE(e.emoji_name, '') as favorite_emoji
 		FROM users u
 		LEFT JOIN (
 			SELECT l.user_id, COUNT(*) as reactions_count
@@ -123,7 +123,8 @@ func getUserStatisticsHandler(c echo.Context) error {
 		LEFT JOIN (
 			SELECT t.user_id, t.emoji_name
 			FROM (
-				SELECT l.user_id, r.emoji_name, COUNT(*) as emoji_count,
+				SELECT l.user_id, r.emoji_name, 
+					   COUNT(*) as emoji_count,
 					   ROW_NUMBER() OVER (PARTITION BY l.user_id ORDER BY COUNT(*) DESC, r.emoji_name DESC) as rn
 				FROM livestreams l
 				INNER JOIN reactions r ON r.livestream_id = l.id
@@ -143,7 +144,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 			SELECT 
 				u.id,
 				u.name,
-				IFNULL(SUM(r.reaction_count), 0) + IFNULL(SUM(lc.tip_sum), 0) as score
+				COALESCE(SUM(r.reaction_count), 0) + COALESCE(SUM(lc.tip_sum), 0) as score
 			FROM users u
 			LEFT JOIN (
 				SELECT l.user_id, COUNT(*) as reaction_count
@@ -158,9 +159,15 @@ func getUserStatisticsHandler(c echo.Context) error {
 				GROUP BY l.user_id
 			) lc ON lc.user_id = u.id
 			GROUP BY u.id, u.name
+		),
+		ranked_users AS (
+			SELECT 
+				name,
+				ROW_NUMBER() OVER (ORDER BY score DESC) as user_rank
+			FROM user_scores
 		)
-		SELECT RANK() OVER (ORDER BY score DESC) as rank
-		FROM user_scores
+		SELECT user_rank
+		FROM ranked_users
 		WHERE name = ?
 	`
 	if err := tx.GetContext(ctx, &rank, rankQuery, username); err != nil {
