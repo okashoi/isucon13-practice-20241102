@@ -4,6 +4,7 @@ package main
 // sqlx的な参考: https://jmoiron.github.io/sqlx/
 
 import (
+	"cloud.google.com/go/profiler"
 	"fmt"
 	"github.com/felixge/fgprof"
 	"log"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
@@ -128,6 +130,14 @@ func main() {
 	go func() {
 		log.Println(http.ListenAndServe(":6060", nil))
 	}()
+
+	if err := profiler.Start(profiler.Config{
+		Service:        "isucon13",
+		ServiceVersion: time.Now().Format("2006-01-02 15:04:05"),
+		DebugLogging:   true,
+	}); err != nil {
+		log.Fatalln(err)
+	}
 
 	e := echo.New()
 	e.Debug = true
