@@ -6,6 +6,10 @@ package main
 import (
 	"fmt"
 	"github.com/felixge/fgprof"
+	"github.com/go-sql-driver/mysql"
+	"github.com/jmoiron/sqlx"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"log"
 	"net"
 	"net/http"
@@ -13,11 +17,6 @@ import (
 	"os/exec"
 	"strconv"
 	"sync"
-
-	"github.com/go-sql-driver/mysql"
-	"github.com/jmoiron/sqlx"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
@@ -40,8 +39,6 @@ func init() {
 	if secretKey, ok := os.LookupEnv("ISUCON13_SESSION_SECRETKEY"); ok {
 		secret = []byte(secretKey)
 	}
-	resetSubdomains()
-	rrCache = sync.Map{}
 }
 
 type InitializeResponse struct {
@@ -117,6 +114,9 @@ func initializeHandler(c echo.Context) error {
 		c.Logger().Warnf("init.sh failed with err=%s", string(out))
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
 	}
+
+	resetSubdomains()
+	rrCache = sync.Map{}
 
 	c.Request().Header.Add("Content-Type", "application/json;charset=utf-8")
 	return c.JSON(http.StatusOK, InitializeResponse{
