@@ -1342,8 +1342,6 @@ func DNSHandler(w dns.ResponseWriter, r *dns.Msg) {
 
 	m := new(dns.Msg)
 	m.SetReply(r)
-	m.Authoritative = true
-
 	question := r.Question[0]
 
 	switch question.Qtype {
@@ -1359,9 +1357,9 @@ func DNSHandler(w dns.ResponseWriter, r *dns.Msg) {
 
 	case dns.TypeA:
 		muSubdomains.RLock()
-		isPresent := slices.Contains(subdomains, strings.ToLower(question.Name))
-		muSubdomains.RUnlock()
+		defer muSubdomains.RUnlock()
 
+		isPresent := slices.Contains(subdomains, strings.ToLower(question.Name))
 		if isPresent {
 			m.Answer = []dns.RR{
 				newRR(fmt.Sprintf("%s 120 IN A 192.168.0.11", question.Name)),
