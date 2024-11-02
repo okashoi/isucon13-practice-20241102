@@ -1336,6 +1336,7 @@ func addSubdomain(subdomain string) {
 
 // DNSHandler は DNS リクエストを処理します。
 func DNSHandler(w dns.ResponseWriter, r *dns.Msg) {
+	fmt.Printf("DNSHandler: %v\n", r)
 	if len(r.Question) == 0 {
 		return
 	}
