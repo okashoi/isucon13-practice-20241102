@@ -1384,5 +1384,6 @@ func runDNS() error {
 	// DNS サーバーの設定
 	dns.HandleFunc("u.isucon.dev.", DNSHandler)
 	server := &dns.Server{Addr: ":53", Net: "udp"}
+	log.Printf("Starting DNS server on %s", server.Addr)
 	return server.ListenAndServe()
 }
