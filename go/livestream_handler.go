@@ -500,17 +500,21 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModel Li
 		return Livestream{}, err
 	}
 
-	tags := make([]Tag, len(livestreamTagModels))
-	for i := range livestreamTagModels {
-		tagModel := TagModel{}
-		if err := tx.GetContext(ctx, &tagModel, "SELECT * FROM tags WHERE id = ?", livestreamTagModels[i].TagID); err != nil {
-			return Livestream{}, err
-		}
+	tagIDs := make([]int64, len(livestreamTagModels))
+	for i, model := range livestreamTagModels {
+		tagIDs[i] = model.TagID
+	}
 
-		tags[i] = Tag{
-			ID:   tagModel.ID,
-			Name: tagModel.Name,
-		}
+	// `IN`句で一括取得
+	var tags []Tag
+	query, args, err := sqlx.In("SELECT id, name FROM tags WHERE id IN (?)", tagIDs)
+	if err != nil {
+		return Livestream{}, err
+	}
+
+	query = tx.Rebind(query) // プレースホルダーを適切な形式に調整
+	if err := tx.SelectContext(ctx, &tags, query, args...); err != nil {
+		return Livestream{}, err
 	}
 
 	livestream := Livestream{
