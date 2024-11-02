@@ -28,6 +28,9 @@ kataribe:
 	sudo cp /var/log/nginx/access.log /tmp/last-access.log && sudo chmod 0666 /tmp/last-access.log
 	cat /tmp/last-access.log | kataribe -conf kataribe.toml > ~/kataribe-logs/$$timestamp.log
 	cat ~/kataribe-logs/$$timestamp.log | grep --after-context 20 "Top 20 Sort By Total"
+log-issue-comment: kataribe
+	cat ~/kataribe-logs/$$timestamp.log | grep --after-context 20 "Top 20 Sort By Total" > output.txt
+	gh issue comment 1 --body "$$(echo '```'; cat output.txt; echo '```')"
 
 pprof: TIME=60
 pprof: PROF_FILE=~/pprof.samples.$(shell TZ=Asia/Tokyo date +"%H%M").$(shell git rev-parse HEAD | cut -c 1-8).pb.gz
