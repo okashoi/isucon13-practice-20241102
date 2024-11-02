@@ -32,9 +32,8 @@ const (
 )
 
 var (
-	powerDNSSubdomainAddress string
-	dbConn                   *sqlx.DB
-	secret                   = []byte("isucon13_session_cookiestore_defaultsecret")
+	dbConn *sqlx.DB
+	secret = []byte("isucon13_session_cookiestore_defaultsecret")
 )
 
 func init() {
@@ -42,7 +41,7 @@ func init() {
 	if secretKey, ok := os.LookupEnv("ISUCON13_SESSION_SECRETKEY"); ok {
 		secret = []byte(secretKey)
 	}
-
+	resetSubdomains()
 	rrCache = sync.Map{}
 }
 
@@ -205,13 +204,6 @@ func main() {
 	}
 	defer conn.Close()
 	dbConn = conn
-
-	subdomainAddr, ok := os.LookupEnv(powerDNSSubdomainAddressEnvKey)
-	if !ok {
-		e.Logger.Errorf("environ %s must be provided", powerDNSSubdomainAddressEnvKey)
-		os.Exit(1)
-	}
-	powerDNSSubdomainAddress = subdomainAddr
 
 	// HTTPサーバ起動
 	listenAddr := net.JoinHostPort("", strconv.Itoa(listenPort))
