@@ -134,6 +134,7 @@ func main() {
 	if err := profiler.Start(profiler.Config{
 		Service:        "isucon13",
 		ServiceVersion: time.Now().Format("2006-01-02 15:04:05"),
+		DebugLogging:   true,
 	}); err != nil {
 		log.Fatalln(err)
 	}
