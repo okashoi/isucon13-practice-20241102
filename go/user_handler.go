@@ -256,7 +256,7 @@ func registerHandler(c echo.Context) error {
 	}
 
 	// DNS登録
-	addSubdomain(req.Name + ".u.isucon.dev.")
+	addSubdomain(req.Name + ".t.isucon.pw.")
 
 	user, err := fillUserResponse(ctx, tx, userModel)
 	if err != nil {
