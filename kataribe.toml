@@ -87,17 +87,17 @@ duration_index = 10
 # You can aggregate requests by regular expression
 # For overview of regexp syntax: https://golang.org/pkg/regexp/syntax/
 #
-#[[bundle]]
-#regexp = '^(GET|HEAD) /users/[0-9]+\b'
-#name = 'GET /memo/*'
+[[bundle]]
+regexp = '^GET /api/livestream/search\?.+\b'
+name = 'GET /api/livestream/search'
 #
-#[[bundle]]
-#regexp = '^(GET|HEAD) /stylesheets/'
-#name = 'GET /stylesheets/*'
+[[bundle]]
+regexp = '^GET /api/user/[a-z0-9]+/statistics'
+name = 'GET /api/user/<username>/statistics'
 #
-#[[bundle]]
-#regexp = '^(GET|HEAD) /images/'
-#name = 'GET /images/*'
+[[bundle]]
+regexp = '^GET /api/user/[a-z0-9]+/icon'
+name = 'GET /api/user/<username>/icon'
 
 ################################################################################
 # Replace
@@ -107,16 +107,16 @@ duration_index = 10
 # You can replace the part of urls which matched to your regular expressions.
 # For overview of regexp syntax: https://golang.org/pkg/regexp/syntax/
 #
-#[[replace]]
-#regexp = '/[0-9]+(/|\s)'
-#replace = '/<num>$1'
+[[replace]]
+regexp = '/[0-9]+(/|\s)'
+replace = '/<num>$1'
 #
-#[[replace]]
-#regexp = '=[0-9]+(&|\s)'
-#replace = '=<num>$1'
+[[replace]]
+regexp = '=[0-9]+(&|\s)'
+replace = '=<num>$1'
 #
-#[[replace]]
-#regexp = '\s+HTTP/[0-9.]+$'
-#replace = ''
+[[replace]]
+regexp = '\s+HTTP/[0-9.]+$'
+replace = ''
 
 ################################################################################
