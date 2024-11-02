@@ -5,7 +5,7 @@ gogo: stop-services build truncate-logs start-services
 stop-services:
 	sudo systemctl stop nginx
 	sudo systemctl stop isupipe-go
-	sudo systemctl stop mysql
+	ssh isucon-s2 "sudo systemctl stop mysql"
 
 build:
 	cd go && make build
@@ -14,11 +14,11 @@ truncate-logs:
 	sudo journalctl --vacuum-size=1K
 	sudo truncate --size 0 /var/log/nginx/access.log
 	sudo truncate --size 0 /var/log/nginx/error.log
-	sudo truncate --size 0 /var/log/mysql/mysql-slow.log && sudo chmod 666 /var/log/mysql/mysql-slow.log
-	sudo truncate --size 0 /var/log/mysql/error.log
+	ssh isucon-s2 "sudo truncate --size 0 /var/log/mysql/mysql-slow.log && sudo chmod 666 /var/log/mysql/mysql-slow.log"
+	ssh isucon-s2 "sudo truncate --size 0 /var/log/mysql/error.log"
 
 start-services:
-	sudo systemctl start mysql
+	ssh isucon-s2 "sudo systemctl start mysql"
 	sudo setcap 'cap_net_bind_service=+ep' go/isupipe
 	sudo systemctl start isupipe-go
 	sudo systemctl start nginx
