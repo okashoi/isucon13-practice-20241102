@@ -89,11 +89,11 @@ func getUserStatisticsHandler(c echo.Context) error {
 	var stats UserStatistics
 	query := `
 		SELECT
-			COALESCE(SUM(r.tip), 0) AS total_tip,
+			COALESCE(SUM(lc.tip), 0) AS total_tip,
 			COALESCE(COUNT(DISTINCT lc.id), 0) AS total_livecomments,
 			COALESCE(COUNT(DISTINCT r.id), 0) AS total_reactions,
 			COALESCE(SUM(lvh.viewers_count), 0) AS viewers_count,
-			(SELECT emoji_name 
+			(SELECT r.emoji_name 
 			 FROM reactions AS r 
 			 JOIN livestreams AS l ON r.livestream_id = l.id 
 			 WHERE l.user_id = ? 
