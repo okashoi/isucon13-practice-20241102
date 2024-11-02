@@ -1381,14 +1381,10 @@ func DNSHandler(w dns.ResponseWriter, r *dns.Msg) {
 	_ = w.WriteMsg(m)
 }
 
-func runDNS() {
+func runDNS() error {
 	// DNS サーバーの設定
 	dns.HandleFunc("u.isucon.dev.", DNSHandler)
-	go func() {
-		server := &dns.Server{Addr: ":53", Net: "udp"}
-		log.Println(">>>> STARTING DNS SERVER <<<<")
-		if err := server.ListenAndServe(); err != nil {
-			log.Fatalf("Failed to start DNS server: %v", err)
-		}
-	}()
+	server := &dns.Server{Addr: ":53", Net: "udp"}
+	log.Printf("Starting DNS server on %s", server.Addr)
+	return server.ListenAndServe()
 }
