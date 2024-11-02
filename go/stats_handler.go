@@ -88,13 +88,9 @@ func getUserStatisticsHandler(c echo.Context) error {
 
 	var ranking UserRanking
 	query := `
-		SELECT u.name, (COUNT(r.id) + SUM(l2.tip)) AS score
-		FROM users u
-		INNER JOIN livestreams l ON l.user_id = u.id
-		INNER JOIN reactions r ON r.livestream_id = l.id
-		INNER JOIN livecomments l2 ON l2.livestream_id = l.id
-		GROUP BY u.id
-		ORDER BY score DESC;`
+SELECT u.name, (SELECT COUNT(*) FROM reactions WHERE user_id = u.id) + (SELECT IFNULL(SUM(tip), 0) FROM livecomments WHERE user_id = u.id) AS score
+FROM users u
+ORDER BY score DESC;`
 	if err := tx.Select(&ranking, query); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get users: "+err.Error())
 	}
