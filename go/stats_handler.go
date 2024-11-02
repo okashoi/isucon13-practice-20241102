@@ -44,8 +44,8 @@ type UserStatistics struct {
 }
 
 type UserRankingEntry struct {
-	Username string
-	Score    int64
+	Username string `db:"name"`
+	Score    int64  `db:"score"`
 }
 type UserRanking []UserRankingEntry
 
@@ -86,39 +86,12 @@ func getUserStatisticsHandler(c echo.Context) error {
 		}
 	}
 
-	// ランク算出
-	var users []*UserModel
-	if err := tx.SelectContext(ctx, &users, "SELECT * FROM users"); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get users: "+err.Error())
-	}
-
 	var ranking UserRanking
-	for _, user := range users {
-		var reactions int64
-		query := `
-		SELECT COUNT(*) FROM users u
-		INNER JOIN livestreams l ON l.user_id = u.id
-		INNER JOIN reactions r ON r.livestream_id = l.id
-		WHERE u.id = ?`
-		if err := tx.GetContext(ctx, &reactions, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count reactions: "+err.Error())
-		}
-
-		var tips int64
-		query = `
-		SELECT IFNULL(SUM(l2.tip), 0) FROM users u
-		INNER JOIN livestreams l ON l.user_id = u.id	
-		INNER JOIN livecomments l2 ON l2.livestream_id = l.id
-		WHERE u.id = ?`
-		if err := tx.GetContext(ctx, &tips, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count tips: "+err.Error())
-		}
-
-		score := reactions + tips
-		ranking = append(ranking, UserRankingEntry{
-			Username: user.Name,
-			Score:    score,
-		})
+	query := `
+SELECT u.name, (SELECT COUNT(*) FROM reactions WHERE user_id = u.id) + (SELECT IFNULL(SUM(tip), 0) FROM livecomments WHERE user_id = u.id) AS score
+FROM users u;`
+	if err := tx.Select(&ranking, query); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get users: "+err.Error())
 	}
 	sort.Sort(ranking)
 
@@ -133,7 +106,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 
 	// リアクション数
 	var totalReactions int64
-	query := `SELECT COUNT(*) FROM users u 
+	query = `SELECT COUNT(*) FROM users u 
     INNER JOIN livestreams l ON l.user_id = u.id 
     INNER JOIN reactions r ON r.livestream_id = l.id
     WHERE u.name = ?
