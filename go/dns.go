@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 
 	"github.com/miekg/dns"
@@ -1326,7 +1325,6 @@ func resetSubdomains() {
 
 // addSubdomain は新しいサブドメインを追加します。
 func addSubdomain(subdomain string) {
-	fmt.Printf("addSubdomain: %s\n", subdomain)
 	muSubdomains.Lock()
 	defer muSubdomains.Unlock()
 	subdomains = append(subdomains, subdomain)
@@ -1334,17 +1332,13 @@ func addSubdomain(subdomain string) {
 
 // DNSHandler は DNS リクエストを処理します。
 func DNSHandler(w dns.ResponseWriter, r *dns.Msg) {
-	if len(r.Question) == 0 {
-		return
-	}
-
 	m := new(dns.Msg)
 	m.SetReply(r)
 	question := r.Question[0]
 
 	switch question.Qtype {
 	case dns.TypeNS:
-		if strings.ToLower(question.Name) == "t.isucon.pw." {
+		if question.Name == "t.isucon.pw." {
 			m.Answer = []dns.RR{
 				newRR("t.isucon.pw. 120 IN NS ns1.t.isucon.pw."),
 			}
@@ -1357,7 +1351,7 @@ func DNSHandler(w dns.ResponseWriter, r *dns.Msg) {
 		muSubdomains.RLock()
 		defer muSubdomains.RUnlock()
 
-		isPresent := slices.Contains(subdomains, strings.ToLower(question.Name))
+		isPresent := slices.Contains(subdomains, question.Name)
 		if isPresent {
 			m.Answer = []dns.RR{
 				newRR(fmt.Sprintf("%s 120 IN A 192.168.0.11", question.Name)),
