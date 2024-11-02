@@ -27,8 +27,7 @@ import (
 )
 
 const (
-	listenPort                     = 8080
-	powerDNSSubdomainAddressEnvKey = "ISUCON13_POWERDNS_SUBDOMAIN_ADDRESS"
+	listenPort = 8080
 )
 
 var (

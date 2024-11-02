@@ -1379,7 +1379,7 @@ func DNSHandler(w dns.ResponseWriter, r *dns.Msg) {
 		// 他のクエリタイプは無視
 	}
 
-	w.WriteMsg(m)
+	_ = w.WriteMsg(m)
 }
 
 func runDNS() {
